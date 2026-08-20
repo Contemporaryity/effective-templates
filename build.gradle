@@ -9,6 +9,7 @@ import groovy.util.Node
 //   * Forgelin 2 - Kotlin language support (ILanguageAdapter)
 //   * Scala language support (optional switch, sources go under src/main/scala/)
 //   * Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
+//   * Dependencies in a separate dependencies.gradle
 //   * Tags.java auto-extraction of mod metadata (modVersion/modName/modId)
 // ============================================================
 
@@ -104,26 +105,8 @@ repositories {
     }
 }
 
-dependencies {
-    if (project.enableUsingKotlin.toBoolean()) {
-        // Kotlin stdlib: needed to compile & run in the dev environment.
-        // It is NOT bundled into the mod jar - Forgelin's DepLoader downloads
-        // the matching Kotlin version at runtime instead.
-        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-
-        // Forgelin 2 (LegacyModdingMC): Kotlin language adapter for 1.7.10
-        // https://github.com/LegacyModdingMC/Forgelin
-        // Resolved from the Modrinth Maven
-        implementation "maven.modrinth:forgelin-legacy:$forgelin_version"
-    }
-
-    if (project.enableUsingScala.toBoolean()) {
-        // When Scala is enabled, declare the scala-library yourself (example below)
-        // implementation "org.scala-lang:scala-library:2.13.16"
-    }
-
-    implementation fileTree(dir: 'lib', includes: ['*.jar'])
-}
+// Mod dependencies live in dependencies.gradle (like GTNH ExampleMod1.7.10)
+apply from: 'dependencies.gradle'
 
 def dependenciesList = []
 if (!project.modDependencies.isEmpty()) dependenciesList.add(project.modDependencies)
