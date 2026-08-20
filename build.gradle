@@ -8,6 +8,10 @@ import groovy.util.Node
 //   * UniMixins - Mixin loading and ASM transformer compatibility (Mixingasm) in one
 //   * Forgelin 2 - Kotlin language support (ILanguageAdapter)
 //   * Scala language support (optional switch, sources go under src/main/scala/)
+//   * MCLib - optional shadeable library (UpdateCheck/AssetDirector/
+//     SloppyDepLoader), disabled by default, see mclib.gradle
+//     MCLib - 可选的内嵌库（UpdateCheck/AssetDirector/SloppyDepLoader），
+//     默认禁用，详见 mclib.gradle
 //   * Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
 //   * Dependencies in a separate dependencies.gradle
 //   * Tags.java auto-extraction of mod metadata (modVersion/modName/modId),
@@ -111,6 +115,23 @@ repositories {
 
 // Mod dependencies live in dependencies.gradle (like GTNH ExampleMod1.7.10)
 apply from: 'dependencies.gradle'
+
+// === === === MCLib Integration (optional, default OFF) === === ===
+// MCLib (https://github.com/makamys/MCLib) integration lives in mclib.gradle:
+// shade the library into the jar, repackage it under this mod's package via
+// srgExtra and bundle its classes. It only applies when
+// enableUsingMCLib=true; otherwise the MCLib compat sources under
+// <modPackage>/mclib/ are excluded from compilation so the build works
+// without the library on the classpath.
+// MCLib 集成逻辑位于 mclib.gradle：shade 依赖、srgExtra 重打包、并入 jar。
+// 仅当 enableUsingMCLib=true 时应用；否则排除 <模组包>/mclib/ 下的兼容源码，
+// 保证未引入该库时也能正常编译。
+if (project.enableUsingMCLib.toBoolean()) {
+    apply from: 'mclib.gradle'
+} else {
+    def modPackagePath = project.modGroupId.toString().replace('.', '/')
+    sourceSets.main.java.exclude("${modPackagePath}/mclib/**")
+}
 
 def dependenciesList = []
 if (!project.modDependencies.isEmpty()) dependenciesList.add(project.modDependencies)

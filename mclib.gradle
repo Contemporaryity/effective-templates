@@ -1,0 +1,88 @@
+// ============================================================
+// mclib.gradle - MCLib integration script (disabled by default)
+// mclib.gradle - MCLib 集成脚本（默认禁用）
+//
+// MCLib (https://github.com/makamys/MCLib) is a shadeable library for 1.7.10
+// mods containing UpdateCheck, AssetDirector and SloppyDepLoader. This script
+// wires it up exactly as described in MCLib's own README:
+// MCLib（https://github.com/makamys/MCLib）是面向 1.7.10 模组的可内嵌（shade）库，
+// 内含 UpdateCheck、AssetDirector 与 SloppyDepLoader。本脚本按 MCLib 官方
+// README 的方式接入：
+//
+//   1. Resolve it from the jitpack.io repository (already declared in
+//      build.gradle) as a shaded dependency, excluding the optional
+//      CodeChickenLib part.
+//      从 jitpack.io 仓库（已在 build.gradle 中声明）解析 shade 依赖，
+//      并排除可选的 CodeChickenLib 部分。
+//   2. Repackage makamys/mclib under this mod's own package at reobf time
+//      (srgExtra "PK: ..."), so multiple mods each embedding MCLib never
+//      collide at runtime.
+//      在 reobf 阶段通过 srgExtra "PK: ..." 把 makamys/mclib 重打包到本模组
+//      自己的包下，多个模组各自内嵌 MCLib 时互不冲突。
+//   3. Unpack the MCLib jar into the mod jar (minus META-INF), i.e. classic
+//      FG 1.2 shading.
+//      把 MCLib jar 解压并入模组 jar（剔除 META-INF），即经典 FG 1.2 shading。
+//
+// The integration is applied from build.gradle only when
+// enableUsingMCLib=true in gradle.properties; otherwise the MCLib compat
+// sources are excluded from compilation and nothing is downloaded.
+// 仅当 gradle.properties 中 enableUsingMCLib=true 时由 build.gradle 应用本脚本；
+// 否则 MCLib 兼容源码会被排除编译，也不会下载任何依赖。
+// ============================================================
+
+def mclibVersion = project.findProperty('mclibVersion')
+
+// This mod's package path (e.g. com/example/examplemod), derived from
+// modGroupId; used as the repackage target for the shaded MCLib classes.
+// 本模组的包路径（如 com/example/examplemod），取自 modGroupId，
+// 作为 shade 进来的 MCLib 类的重打包目标。
+def modPackagePath = project.modGroupId.toString().replace('.', '/')
+
+// --- 2. Repackage (重打包) ---
+// At reobf time every reference to (and definition of) makamys/mclib is
+// rewritten into <modPackage>/repackage/makamys/mclib. Both this mod's own
+// references and the shaded MCLib classes inside the jar go through reobf,
+// so they stay consistent. In the dev environment (runClient) no reobf
+// happens and the classes stay at makamys.mclib, which is what the compat
+// sources import.
+// reobf 时所有对 makamys/mclib 的引用与定义都会被改写为
+// <模组包>/repackage/makamys/mclib。模组自身的引用和 jar 内 shade 的 MCLib
+// 类都会经过 reobf，因此保持一致。开发环境（runClient）不经过 reobf，
+// 类仍位于 makamys.mclib，与兼容源码中的 import 一致。
+minecraft {
+    srgExtra "PK: makamys/mclib ${modPackagePath}/repackage/makamys/mclib"
+}
+
+// --- 1. Shade configuration (shade 配置) ---
+// The MCLib README uses "compile.extendsFrom shade" (pre-Gradle-7 idiom).
+// This template runs on Gradle 7, where the compile classpath is fed by
+// 'implementation' instead, so shade extends that configuration: the shaded
+// library then lands on both the compile and the runtime classpath.
+// MCLib README 使用 "compile.extendsFrom shade"（Gradle 7 之前的写法）。
+// 本模板运行于 Gradle 7，编译类路径由 'implementation' 提供，
+// 因此让 shade 挂到该配置下：shade 的库同时进入编译与运行时类路径。
+configurations {
+    shade
+    implementation.extendsFrom shade
+}
+
+dependencies {
+    // codechicken (CodeChickenLib) is only needed for MCLib's InventoryUtils2
+    // helper; exclude it as recommended by MCLib's README.
+    // codechicken（CodeChickenLib）仅用于 MCLib 的 InventoryUtils2 辅助类，
+    // 按 MCLib README 的建议排除。
+    shade("com.github.makamys:MCLib:${mclibVersion}") {
+        exclude group: 'codechicken'
+    }
+}
+
+// --- 3. Bundle MCLib into the mod jar (把 MCLib 打进模组 jar) ---
+jar {
+    configurations.shade.each { dep ->
+        from(project.zipTree(dep)) {
+            exclude 'META-INF', 'META-INF/**'
+        }
+    }
+}
+
+println ">>> MCLib enabled: shading com.github.makamys:MCLib:${mclibVersion} into ${modPackagePath}/repackage/makamys/mclib"
