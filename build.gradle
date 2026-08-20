@@ -233,6 +233,35 @@ if (project.enableUsingMixin.toBoolean()) {
     }
 }
 
+// === === === Developer Account (GTNH style) === === ===
+// 开发者账户：runClient 启动时使用固定的玩家名（默认 developer，来自 gradle.properties 的
+// developmentEnvironmentUserName），不再是随机生成的 Player；UUID 由用户名确定性生成
+// （UUID.nameUUIDFromBytes，即 GTNH RetroFuturaGradle 的离线 fallback 算法），
+// 同一名称始终对应同一 UUID，不同开发者改名即可获得各自独立的账户与存档数据。
+// 命令行临时覆盖（不改文件）：gradlew runClient -PdevName=Alice
+// Fixed developer account for runClient: the player name comes from
+// developmentEnvironmentUserName (default "developer") instead of a random
+// Player; the UUID is deterministically derived from the username via
+// UUID.nameUUIDFromBytes (the offline fallback used by GTNH RetroFuturaGradle),
+// so the same name always maps to the same UUID. Different developers just use
+// different names. Temporary override: gradlew runClient -PdevName=Alice
+def devName = project.hasProperty('devName') && !project.devName.toString().isEmpty()
+        ? project.devName
+        : (project.hasProperty('developmentEnvironmentUserName') && !project.developmentEnvironmentUserName.toString().isEmpty()
+            ? project.developmentEnvironmentUserName
+            : 'developer')
+def devUUID = project.hasProperty('developmentEnvironmentUUID') && !project.developmentEnvironmentUUID.toString().isEmpty()
+        ? project.developmentEnvironmentUUID
+        : UUID.nameUUIDFromBytes(devName.getBytes('UTF-8')).toString()
+
+runClient {
+    doFirst {
+        println ">>> Starting Minecraft with developer account: ${devName} (UUID: ${devUUID})"
+    }
+    args '--username', devName
+    args '--uuid', devUUID
+}
+
 sourceCompatibility = targetCompatibility = "1.8"
 
 tasks.withType(JavaCompile).configureEach {
