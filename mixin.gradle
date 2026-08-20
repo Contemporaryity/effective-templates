@@ -1,27 +1,25 @@
 // ============================================================
-// mixin.gradle - UniMixins 集成脚本
+// mixin.gradle - UniMixins integration script
 // UniMixins integration (Mixin loading + ASM transformer compatibility)
 //
-// UniMixins 同时提供 Mixin 加载与 ASM 兼容（Mixingasm 模块），
-// 因此不再需要单独的 MixinBooter / SpongeMixins / ASM 兼容层。
 // UniMixins provides both Mixin loading and ASM compatibility
-// (Mixingasm module), so no separate Mixin loader is needed.
+// (Mixingasm module), so no separate MixinBooter / SpongeMixins / ASM
+// compatibility layer is needed.
 // https://github.com/LegacyModdingMC/UniMixins
 // ============================================================
 
-// jitpack.io 仓库已在 build.gradle 中自动预置，此处无需重复声明
 // The jitpack.io repository is pre-configured in build.gradle
 
 def unimixinsVersion = project.findProperty('unimixinsVersion')
 
 dependencies {
-    // unimixins-all 包含：UniMix (Mixin fork)、SpongeMixins、MixinBooterLegacy、
-    // MixinExtras、GTNHMixins、Compat、Mixingasm
+    // unimixins-all includes: UniMix (Mixin fork), SpongeMixins, MixinBooterLegacy,
+    // MixinExtras, GTNHMixins, Compat, Mixingasm
     implementation("com.github.LegacyModdingMC.UniMixins:unimixins-all-1.7.10:$unimixinsVersion:dev")
     annotationProcessor("com.github.LegacyModdingMC.UniMixins:unimixins-all-1.7.10:$unimixinsVersion:dev")
 }
 
-// 开发环境通过 tweakClass 启动 Mixin / Launch Mixin in the dev environment
+// Launch Mixin in the dev environment
 runClient {
     args("--tweakClass", "org.spongepowered.asm.launch.MixinTweaker")
 }
@@ -46,7 +44,6 @@ jar {
     from outRefMapFile;
 }
 
-// 让 Mixin annotation processor 生成 SRG 映射与 refmap
 // Feed the Mixin annotation processor with SRG mappings and refmap output
 tasks.compileJava.options.compilerArgs += ["-AreobfSrgFile=${tasks.reobf.srg}", "-AoutSrgFile=${outSrgFile}", "-AoutRefMapFile=${outRefMapFile}"];
 

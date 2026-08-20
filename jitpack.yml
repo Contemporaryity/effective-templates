@@ -1,12 +1,10 @@
-# Jitpack 自动兼容配置 / Jitpack compatibility configuration.
+# Jitpack compatibility configuration.
 #
-# 将本仓库推送到 GitHub 并打上 tag 后，Jitpack 会依据本文件自动构建，
-# 其他项目即可通过 `com.github.<用户名>:<仓库名>:<tag>` 直接拉取构建产物。
 # After pushing this repo to GitHub and tagging a release, Jitpack builds it
 # automatically, so other projects can depend on it via
 # `com.github.<user>:<repo>:<tag>`.
 #
-# 参考 / Reference:
+# Reference:
 # https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/master/jitpack.yml
 
 jdk:

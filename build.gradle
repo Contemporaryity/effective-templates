@@ -1,18 +1,15 @@
 // ============================================================
-// build.gradle - Minecraft 1.7.10 Mod 模板构建脚本
-// Template build script for Minecraft 1.7.10 mods
+// build.gradle - Template build script for Minecraft 1.7.10 mods
 import org.gradle.api.GradleException
 import groovy.util.Node
 //
-// 特性 / Features:
-//   * ForgeGradle 1.2 (anatawa12 fork) - 支持高版本 Gradle (>= 7.4)
-//   * UniMixins - 一站式 Mixin 加载 + ASM transformer 兼容 (Mixingasm 模块)
-//     UniMixins - Mixin loading and ASM compatibility (Mixingasm) in one
-//   * Forgelin 2 - Kotlin 语言支持 (ILanguageAdapter)
-//   * Scala 语言支持（可选开关）/ Optional Scala language support
-//   * Jitpack 自动兼容 - jitpack.yml + 自动预置 jitpack.io 仓库
-//     Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
-//   * Tags.java 自动提取 mod 元数据 (modVersion/modName/modId)
+// Features:
+//   * ForgeGradle 1.2 (anatawa12 fork) - supports modern Gradle (>= 7.4)
+//   * UniMixins - Mixin loading and ASM transformer compatibility (Mixingasm) in one
+//   * Forgelin 2 - Kotlin language support (ILanguageAdapter)
+//   * Scala language support (optional switch, sources go under src/main/scala/)
+//   * Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
+//   * Tags.java auto-extraction of mod metadata (modVersion/modName/modId)
 // ============================================================
 
 buildscript {
@@ -53,12 +50,12 @@ apply plugin: 'java'
 apply plugin: 'maven-publish'
 
 if (project.enableUsingKotlin.toBoolean()) {
-    // Kotlin 2.x 的入口插件 / The entry-point plugin for Kotlin 2.x
+    // The entry-point plugin for Kotlin 2.x
     apply plugin: 'org.jetbrains.kotlin.jvm'
 }
 
 if (project.enableUsingScala.toBoolean()) {
-    // Scala 插件（源码放在 src/main/scala/）/ Scala plugin (sources go under src/main/scala/)
+    // Scala plugin (sources go under src/main/scala/)
     apply plugin: 'scala'
 }
 
@@ -99,7 +96,6 @@ repositories {
         url 'https://maven.aliyun.com/repository/public/'
     }
 
-    // Jitpack 自动预置：所有 com.github.* 依赖（含 UniMixins）无需再手动添加仓库
     // Jitpack pre-configured: com.github.* dependencies (incl. UniMixins)
     // no longer need the repository to be declared manually
     maven {
@@ -110,21 +106,18 @@ repositories {
 
 dependencies {
     if (project.enableUsingKotlin.toBoolean()) {
-        // Kotlin stdlib：开发环境编译与运行所需。
-        // 不会被打进 mod jar —— Forgelin 的 DepLoader 会在运行时动态下载匹配的 Kotlin。
         // Kotlin stdlib: needed to compile & run in the dev environment.
         // It is NOT bundled into the mod jar - Forgelin's DepLoader downloads
         // the matching Kotlin version at runtime instead.
         implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 
-        // Forgelin 2 (LegacyModdingMC)：1.7.10 的 Kotlin 语言适配器
+        // Forgelin 2 (LegacyModdingMC): Kotlin language adapter for 1.7.10
         // https://github.com/LegacyModdingMC/Forgelin
-        // 通过 Modrinth Maven 获取 / Resolved from the Modrinth Maven
+        // Resolved from the Modrinth Maven
         implementation "maven.modrinth:forgelin-legacy:$forgelin_version"
     }
 
     if (project.enableUsingScala.toBoolean()) {
-        // 启用 Scala 后需自行声明 scala-library（示例见下）
         // When Scala is enabled, declare the scala-library yourself (example below)
         // implementation "org.scala-lang:scala-library:2.13.16"
     }
@@ -136,7 +129,6 @@ def dependenciesList = []
 if (!project.modDependencies.isEmpty()) dependenciesList.add(project.modDependencies)
 
 def extractTagsFromJava() {
-    // 优先使用 gradle.properties 中手动指定的路径，未指定则自动扫描 src/
     // Prefer the path specified in gradle.properties, otherwise auto-scan src/
     def tagsFilePath = project.hasProperty("tags_file_path") ? project.tags_file_path : null
     def tagsFile
@@ -221,7 +213,6 @@ processResources {
     }
 }
 
-// UniMixins 集成为独立脚本，见 mixin.gradle
 // UniMixins integration lives in mixin.gradle
 if (project.enableUsingMixin.toBoolean()) {
     apply from: 'mixin.gradle'
@@ -234,11 +225,6 @@ if (project.enableUsingMixin.toBoolean()) {
 }
 
 // === === === Developer Account (GTNH style) === === ===
-// 开发者账户：runClient 启动时使用固定的玩家名（默认 developer，来自 gradle.properties 的
-// developmentEnvironmentUserName），不再是随机生成的 Player；UUID 由用户名确定性生成
-// （UUID.nameUUIDFromBytes，即 GTNH RetroFuturaGradle 的离线 fallback 算法），
-// 同一名称始终对应同一 UUID，不同开发者改名即可获得各自独立的账户与存档数据。
-// 命令行临时覆盖（不改文件）：gradlew runClient -PdevName=Alice
 // Fixed developer account for runClient: the player name comes from
 // developmentEnvironmentUserName (default "developer") instead of a random
 // Player; the UUID is deterministically derived from the username via
@@ -340,7 +326,6 @@ publishing {
             artifactId = project.archivesBaseName
             version = project.version
 
-            // 过滤掉 forgeBin 这种没有 groupId 的依赖
             // Filter out dependencies without a groupId (e.g. forgeBin)
             pom.withXml {
                 def depsNode = asNode().get("dependencies")

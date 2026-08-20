@@ -7,9 +7,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 示例 Mixin / Example mixin.
+ * Example mixin.
  *
- * 通过 UniMixins（org.spongepowered.asm）注入客户端主菜单。
  * Mixes into the client main menu via UniMixins.
  */
 @Mixin(GuiMainMenu.class)
