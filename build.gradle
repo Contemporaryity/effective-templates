@@ -10,7 +10,9 @@ import groovy.util.Node
 //   * Scala language support (optional switch, sources go under src/main/scala/)
 //   * Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
 //   * Dependencies in a separate dependencies.gradle
-//   * Tags.java auto-extraction of mod metadata (modVersion/modName/modId)
+//   * Tags.java auto-extraction of mod metadata (modVersion/modName/modId),
+//     implemented in versioning.gradle
+//     依赖独立在 dependencies.gradle；Tags.java 元数据提取逻辑独立在 versioning.gradle
 // ============================================================
 
 buildscript {
@@ -111,63 +113,11 @@ apply from: 'dependencies.gradle'
 def dependenciesList = []
 if (!project.modDependencies.isEmpty()) dependenciesList.add(project.modDependencies)
 
-def extractTagsFromJava() {
-    // Prefer the path specified in gradle.properties, otherwise auto-scan src/
-    def tagsFilePath = project.hasProperty("tags_file_path") ? project.tags_file_path : null
-    def tagsFile
-
-    if (tagsFilePath != null) {
-        tagsFile = file(tagsFilePath)
-        if (!tagsFile.exists()) {
-            throw new GradleException("Tags.java not found at specified path: ${tagsFile}")
-        }
-    } else {
-        def tagsFiles = fileTree("src") {
-            include "**/Tags.java"
-        }.files
-
-        if (tagsFiles.isEmpty()) {
-            throw new GradleException("Tags.java not found under src/ directory")
-        }
-        if (tagsFiles.size() > 1) {
-            throw new GradleException("Multiple Tags.java found under src/: ${tagsFiles*.path}")
-        }
-        tagsFile = tagsFiles.first()
-    }
-
-    def tagsText = tagsFile.text
-    def nameMatcher = (tagsText =~ /NAME\s*=\s*"([^"]+)"/)
-    def modidMatcher = (tagsText =~ /MODID\s*=\s*"([^"]+)"/)
-    def versionMatcher = (tagsText =~ /VERSION\s*=\s*"([^"]+)"/)
-
-    if (!versionMatcher.find()) {
-        throw new GradleException("VERSION not found in ${tagsFile.path}")
-    }
-
-    return [
-        version: versionMatcher.group(1),
-        name   : nameMatcher.find() ? nameMatcher.group(1) : null,
-        modid  : modidMatcher.find() ? modidMatcher.group(1) : null,
-        path   : tagsFile.path
-    ]
-}
-
-def needTags = project.hasProperty("needTagsToIdentify") ? project.needTagsToIdentify.toBoolean() : true
-
-if (needTags) {
-    def tags = extractTagsFromJava()
-    ext.modVersion = tags.version
-    project.version = tags.version
-    if (tags.name)  { ext.modName = tags.name }
-    if (tags.modid) { ext.modId  = tags.modid }
-
-    println ">>> Auto-read from ${tags.path}:"
-    println ">>>   VERSION = ${tags.version}"
-    if (tags.name)  println ">>>   NAME    = ${tags.name}"
-    if (tags.modid) println ">>>   MODID   = ${tags.modid}"
-} else {
-    println ">>> needTagsToIdentify=false, using values from gradle.properties"
-}
+// Tags.java based metadata extraction (modVersion/modName/modId) lives in
+// versioning.gradle; it overwrites project.version before processResources runs.
+// 基于 Tags.java 的元数据提取（modVersion/modName/modId）逻辑位于 versioning.gradle，
+// 它会在 processResources 执行前覆盖 project.version。
+apply from: 'versioning.gradle'
 
 processResources {
     inputs.property "modversion", project.version

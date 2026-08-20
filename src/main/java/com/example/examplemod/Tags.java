@@ -3,7 +3,7 @@ package com.example.examplemod;
 /**
  * Mod metadata.
  *
- * Auto-detected by build.gradle (needTagsToIdentify=true) to fill
+ * Auto-detected by versioning.gradle (needTagsToIdentify=true) to fill
  * mcmod.info and set the mod version.
  */
 public class Tags {

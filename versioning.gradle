@@ -1,0 +1,78 @@
+// ============================================================
+// versioning.gradle - Tags.java based mod metadata extraction
+// versioning.gradle - 基于 Tags.java 的模组元数据提取
+//
+// Separated from build.gradle so that all Tags.java related
+// logic lives in one place.
+// 从 build.gradle 中独立出来，将所有 Tags.java 相关逻辑集中于此。
+//
+// Behaviour / 行为:
+//   * Locates Tags.java (gradle.properties "tags_file_path" or auto-scan src/)
+//     定位 Tags.java（优先 gradle.properties 的 "tags_file_path"，否则自动扫描 src/）
+//   * Extracts VERSION / NAME / MODID constants via regex
+//     通过正则提取 VERSION / NAME / MODID 常量
+//   * Fills project.version / modVersion / modName / modId
+//     填充 project.version / modVersion / modName / modId
+//   * Disabled by setting needTagsToIdentify=false in gradle.properties
+//     可通过在 gradle.properties 中设置 needTagsToIdentify=false 关闭
+// ============================================================
+import org.gradle.api.GradleException
+
+def extractTagsFromJava() {
+    // Prefer the path specified in gradle.properties, otherwise auto-scan src/
+    // 优先使用 gradle.properties 中指定的路径，否则自动扫描 src/
+    def tagsFilePath = project.hasProperty("tags_file_path") ? project.tags_file_path : null
+    def tagsFile
+
+    if (tagsFilePath != null) {
+        tagsFile = file(tagsFilePath)
+        if (!tagsFile.exists()) {
+            throw new GradleException("Tags.java not found at specified path: ${tagsFile}")
+        }
+    } else {
+        def tagsFiles = fileTree("src") {
+            include "**/Tags.java"
+        }.files
+
+        if (tagsFiles.isEmpty()) {
+            throw new GradleException("Tags.java not found under src/ directory")
+        }
+        if (tagsFiles.size() > 1) {
+            throw new GradleException("Multiple Tags.java found under src/: ${tagsFiles*.path}")
+        }
+        tagsFile = tagsFiles.first()
+    }
+
+    def tagsText = tagsFile.text
+    def nameMatcher = (tagsText =~ /NAME\s*=\s*"([^"]+)"/)
+    def modidMatcher = (tagsText =~ /MODID\s*=\s*"([^"]+)"/)
+    def versionMatcher = (tagsText =~ /VERSION\s*=\s*"([^"]+)"/)
+
+    if (!versionMatcher.find()) {
+        throw new GradleException("VERSION not found in ${tagsFile.path}")
+    }
+
+    return [
+        version: versionMatcher.group(1),
+        name   : nameMatcher.find() ? nameMatcher.group(1) : null,
+        modid  : modidMatcher.find() ? modidMatcher.group(1) : null,
+        path   : tagsFile.path
+    ]
+}
+
+def needTags = project.hasProperty("needTagsToIdentify") ? project.needTagsToIdentify.toBoolean() : true
+
+if (needTags) {
+    def tags = extractTagsFromJava()
+    ext.modVersion = tags.version
+    project.version = tags.version
+    if (tags.name)  { ext.modName = tags.name }
+    if (tags.modid) { ext.modId  = tags.modid }
+
+    println ">>> Auto-read from ${tags.path}:"
+    println ">>>   VERSION = ${tags.version}"
+    if (tags.name)  println ">>>   NAME    = ${tags.name}"
+    if (tags.modid) println ">>>   MODID   = ${tags.modid}"
+} else {
+    println ">>> needTagsToIdentify=false, using values from gradle.properties"
+}
