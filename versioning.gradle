@@ -1,20 +1,14 @@
 // ============================================================
 // versioning.gradle - Tags.java based mod metadata extraction
-// versioning.gradle - 基于 Tags.java 的模组元数据提取
 //
 // Separated from build.gradle so that all Tags.java related
 // logic lives in one place.
-// 从 build.gradle 中独立出来，将所有 Tags.java 相关逻辑集中于此。
 //
-// Behaviour / 行为:
+// Behaviour:
 //   * Locates Tags.java (gradle.properties "tags_file_path" or auto-scan src/)
-//     定位 Tags.java（优先 gradle.properties 的 "tags_file_path"，否则自动扫描 src/）
 //   * Extracts VERSION / NAME / MODID constants via regex
-//     通过正则提取 VERSION / NAME / MODID 常量
 //   * Fills project.version / modVersion / modName / modId
-//     填充 project.version / modVersion / modName / modId
 //   * Disabled by setting needTagsToIdentify=false in gradle.properties
-//     可通过在 gradle.properties 中设置 needTagsToIdentify=false 关闭
 // ============================================================
 import org.gradle.api.GradleException
 
