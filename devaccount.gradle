@@ -1,22 +1,14 @@
 // ============================================================
 // devaccount.gradle - Custom launch name for runClient
-// devaccount.gradle - runClient 自定义启动名
 //
 // Fixed developer account for runClient (GTNH style):
-// 为 runClient 提供固定的开发者账号（GTNH 风格）：
 //   * The player name comes from developmentEnvironmentUserName
 //     (default "developer") instead of a random "Player"
-//     玩家名取自 developmentEnvironmentUserName（默认 "developer"），
-//     而不是随机的 Player
 //   * The UUID is deterministically derived from the username via
 //     UUID.nameUUIDFromBytes (the offline fallback used by GTNH
 //     RetroFuturaGradle), so the same name always maps to the same UUID
-//     UUID 通过 UUID.nameUUIDFromBytes 由玩家名确定性推导（即 GTNH
-//     RetroFuturaGradle 的离线回退方式），相同的名字永远对应相同的 UUID
 //   * Different developers just use different names;
 //     temporary override: gradlew runClient -PdevName=Alice
-//     不同的开发者只需使用不同的名字即可；
-//     临时覆盖：gradlew runClient -PdevName=Alice
 // ============================================================
 
 def devName = project.hasProperty('devName') && !project.devName.toString().isEmpty()

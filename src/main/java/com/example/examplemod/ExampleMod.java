@@ -17,10 +17,6 @@ public class ExampleMod
      * {@link MCLibHook}: MCLib's README requires {@code MCLib.init()} to run
      * in exactly this phase. The hook is a silent no-op while MCLib stays
      * disabled (enableUsingMCLib=false).
-     *
-     * 模组构建阶段。通过 {@link MCLibHook} 启动可选的 MCLib 集成：
-     * MCLib 的 README 要求在构建阶段调用 {@code MCLib.init()}。
-     * MCLib 禁用（enableUsingMCLib=false）时该钩子为空操作。
      */
     @EventHandler
     public void construction(FMLConstructionEvent event)

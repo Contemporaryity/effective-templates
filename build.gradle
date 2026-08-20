@@ -216,7 +216,6 @@ if (project.enableUsingMixin.toBoolean()) {
 // === === === Developer Account (GTNH style) === === ===
 // Fixed developer account for runClient: the custom launch name and its
 // deterministic UUID are configured in devaccount.gradle.
-// runClient 的固定开发者账号：自定义启动名及其确定性 UUID 配置在 devaccount.gradle 中。
 apply from: 'devaccount.gradle'
 
 sourceCompatibility = targetCompatibility = "1.8"
@@ -290,6 +289,4 @@ if (project.include_license.toBoolean()){
 // === === === Publishing === === ===
 // The maven-publish plugin, the publication (main jar + sourcesJar + deobfJar)
 // and the POM dependency filtering live in publish.gradle.
-// maven-publish 插件、发布产物（主 jar + sourcesJar + deobfJar）及 POM
-// 依赖过滤均配置在 publish.gradle 中。
 apply from: 'publish.gradle'
