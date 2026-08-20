@@ -9,11 +9,8 @@
 // https://github.com/LegacyModdingMC/UniMixins
 // ============================================================
 
-repositories {
-    maven {
-        url 'https://jitpack.io'
-    }
-}
+// jitpack.io 仓库已在 build.gradle 中自动预置，此处无需重复声明
+// The jitpack.io repository is pre-configured in build.gradle
 
 def unimixinsVersion = project.findProperty('unimixinsVersion')
 

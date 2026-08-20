@@ -9,6 +9,9 @@ import groovy.util.Node
 //   * UniMixins - 一站式 Mixin 加载 + ASM transformer 兼容 (Mixingasm 模块)
 //     UniMixins - Mixin loading and ASM compatibility (Mixingasm) in one
 //   * Forgelin 2 - Kotlin 语言支持 (ILanguageAdapter)
+//   * Scala 语言支持（可选开关）/ Optional Scala language support
+//   * Jitpack 自动兼容 - jitpack.yml + 自动预置 jitpack.io 仓库
+//     Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
 //   * Tags.java 自动提取 mod 元数据 (modVersion/modName/modId)
 // ============================================================
 
@@ -54,6 +57,11 @@ if (project.enableUsingKotlin.toBoolean()) {
     apply plugin: 'org.jetbrains.kotlin.jvm'
 }
 
+if (project.enableUsingScala.toBoolean()) {
+    // Scala 插件（源码放在 src/main/scala/）/ Scala plugin (sources go under src/main/scala/)
+    apply plugin: 'scala'
+}
+
 version = "${project.modVersion}"
 group = "${project.modGroupId}"
 archivesBaseName = "${project.modArchivesName}"
@@ -90,6 +98,14 @@ repositories {
         name 'Aliyun'
         url 'https://maven.aliyun.com/repository/public/'
     }
+
+    // Jitpack 自动预置：所有 com.github.* 依赖（含 UniMixins）无需再手动添加仓库
+    // Jitpack pre-configured: com.github.* dependencies (incl. UniMixins)
+    // no longer need the repository to be declared manually
+    maven {
+        name "Jitpack"
+        url "https://jitpack.io"
+    }
 }
 
 dependencies {
@@ -105,6 +121,12 @@ dependencies {
         // https://github.com/LegacyModdingMC/Forgelin
         // 通过 Modrinth Maven 获取 / Resolved from the Modrinth Maven
         implementation "maven.modrinth:forgelin-legacy:$forgelin_version"
+    }
+
+    if (project.enableUsingScala.toBoolean()) {
+        // 启用 Scala 后需自行声明 scala-library（示例见下）
+        // When Scala is enabled, declare the scala-library yourself (example below)
+        // implementation "org.scala-lang:scala-library:2.13.16"
     }
 
     implementation fileTree(dir: 'lib', includes: ['*.jar'])
