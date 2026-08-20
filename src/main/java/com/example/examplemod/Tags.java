@@ -9,5 +9,5 @@ package com.example.examplemod;
 public class Tags {
     public static final String NAME = "Example Mod";
     public static final String MODID = "examplemod";
-    public static final String VERSION = "f629ad5-main+f629ad5a-dirty";
+    public static final String VERSION = "1.0.0";
 }
