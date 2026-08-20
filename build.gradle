@@ -194,6 +194,19 @@ processResources {
                 'logo': project.logo,
                 'dependencies': dependenciesList
     }
+
+    // Auto-fill the ${modid} placeholder inside the Mixin config (e.g. the
+    // refmap name) and rename the template file to mixins.<modId>.json, so it
+    // matches the MixinConfigs manifest attribute declared in mixin.gradle.
+    // The two patterns are OR-ed: the stock template name and the
+    // already-renamed name, so each file is processed exactly once.
+    filesMatching(["mixins.examplemod.json", "mixins.${project.modId}.json".toString()]) {
+        def expectedName = "mixins.${project.modId}.json".toString()
+        if (it.name != expectedName) {
+            it.name = expectedName
+        }
+        expand 'modid': project.modId
+    }
 }
 
 // UniMixins integration lives in mixin.gradle
@@ -204,6 +217,19 @@ if (project.enableUsingMixin.toBoolean()) {
         from {
             configurations.includeCompile.collect { it.isDirectory() ? it : zipTree(it) }
         }
+    }
+}
+
+// === === === Beneath Loader Mixin Flag === === ===
+// Tells the Beneath loader whether this jar participates in Mixin config
+// discovery. A mod that contains no Mixin configs at all (e.g. it only
+// consumes a Mixin-based feature provided by a prerequisite mod) sets
+// enableBeneathMixin=false; the jar then ships 'BeneathMixin: false' and
+// Beneath skips its mixin.<modid>.json / mixin.<modid>.early.json /
+// mixin.<modid>.late.json check for this jar instead of stalling on startup.
+jar {
+    manifest {
+        attributes 'BeneathMixin': (project.findProperty('enableBeneathMixin') ?: 'true').toString()
     }
 }
 
