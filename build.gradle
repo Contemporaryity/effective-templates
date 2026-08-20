@@ -1,8 +1,8 @@
 // ============================================================
 // build.gradle - Template build script for Minecraft 1.7.10 mods
+
 import org.gradle.api.GradleException
-import groovy.util.Node
-//
+
 // Features:
 //   * ForgeGradle 1.2 (anatawa12 fork) - supports modern Gradle (>= 7.4)
 //   * UniMixins - Mixin loading and ASM transformer compatibility (Mixingasm) in one
@@ -10,15 +10,13 @@ import groovy.util.Node
 //   * Scala language support (optional switch, sources go under src/main/scala/)
 //   * MCLib - optional shadeable library (UpdateCheck/AssetDirector/
 //     SloppyDepLoader), disabled by default, see mclib.gradle
-//     MCLib - 可选的内嵌库（UpdateCheck/AssetDirector/SloppyDepLoader），
-//     默认禁用，详见 mclib.gradle
 //   * Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
 //   * Dependencies in a separate dependencies.gradle
+//   * Maven publishing in a separate publish.gradle
+//   * Custom runClient launch name (dev account) in devaccount.gradle
 //   * Tags.java auto-extraction of mod metadata (modVersion/modName/modId),
 //     implemented in versioning.gradle; optional GTNH-style git tag
 //     versioning can regenerate Tags.java from pushed git tags
-//     依赖独立在 dependencies.gradle；Tags.java 元数据提取逻辑独立在 versioning.gradle，
-//     并可选开启 GTNH 风格的 git tag 版本化（自动改写 Tags.java）
 // ============================================================
 
 buildscript {
@@ -56,7 +54,6 @@ apply plugin: 'forge'
 apply plugin: 'eclipse'
 apply plugin: 'idea'
 apply plugin: 'java'
-apply plugin: 'maven-publish'
 
 if (project.enableUsingKotlin.toBoolean()) {
     // The entry-point plugin for Kotlin 2.x
@@ -123,9 +120,7 @@ apply from: 'dependencies.gradle'
 // enableUsingMCLib=true; otherwise the MCLib compat sources under
 // <modPackage>/mclib/ are excluded from compilation so the build works
 // without the library on the classpath.
-// MCLib 集成逻辑位于 mclib.gradle：shade 依赖、srgExtra 重打包、并入 jar。
-// 仅当 enableUsingMCLib=true 时应用；否则排除 <模组包>/mclib/ 下的兼容源码，
-// 保证未引入该库时也能正常编译。
+
 if (project.enableUsingMCLib.toBoolean()) {
     apply from: 'mclib.gradle'
 } else {
@@ -140,9 +135,6 @@ if (!project.modDependencies.isEmpty()) dependenciesList.add(project.modDependen
 // versioning.gradle; it overwrites project.version before processResources runs.
 // Optionally (enableGitTagVersioning=true) it derives the version from git
 // tags instead and regenerates Tags.java, see versioning.gradle.
-// 基于 Tags.java 的元数据提取（modVersion/modName/modId）逻辑位于 versioning.gradle，
-// 它会在 processResources 执行前覆盖 project.version。可选开启 enableGitTagVersioning=true
-// 后改为从 git tag 推导版本并自动改写 Tags.java，详见 versioning.gradle。
 apply from: 'versioning.gradle'
 
 processResources {
@@ -222,28 +214,10 @@ if (project.enableUsingMixin.toBoolean()) {
 }
 
 // === === === Developer Account (GTNH style) === === ===
-// Fixed developer account for runClient: the player name comes from
-// developmentEnvironmentUserName (default "developer") instead of a random
-// Player; the UUID is deterministically derived from the username via
-// UUID.nameUUIDFromBytes (the offline fallback used by GTNH RetroFuturaGradle),
-// so the same name always maps to the same UUID. Different developers just use
-// different names. Temporary override: gradlew runClient -PdevName=Alice
-def devName = project.hasProperty('devName') && !project.devName.toString().isEmpty()
-        ? project.devName
-        : (project.hasProperty('developmentEnvironmentUserName') && !project.developmentEnvironmentUserName.toString().isEmpty()
-            ? project.developmentEnvironmentUserName
-            : 'developer')
-def devUUID = project.hasProperty('developmentEnvironmentUUID') && !project.developmentEnvironmentUUID.toString().isEmpty()
-        ? project.developmentEnvironmentUUID
-        : UUID.nameUUIDFromBytes(devName.getBytes('UTF-8')).toString()
-
-runClient {
-    doFirst {
-        println ">>> Starting Minecraft with developer account: ${devName} (UUID: ${devUUID})"
-    }
-    args '--username', devName
-    args '--uuid', devUUID
-}
+// Fixed developer account for runClient: the custom launch name and its
+// deterministic UUID are configured in devaccount.gradle.
+// runClient 的固定开发者账号：自定义启动名及其确定性 UUID 配置在 devaccount.gradle 中。
+apply from: 'devaccount.gradle'
 
 sourceCompatibility = targetCompatibility = "1.8"
 
@@ -313,28 +287,9 @@ if (project.include_license.toBoolean()){
     }
 }
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            artifact sourcesJar
-            artifact deobfJar
-            groupId = project.group
-            artifactId = project.archivesBaseName
-            version = project.version
-
-            // Filter out dependencies without a groupId (e.g. forgeBin)
-            pom.withXml {
-                def depsNode = asNode().get("dependencies")
-                if (depsNode.size() > 0) {
-                    depsNode[0].children().removeAll { dep ->
-                        if (!(dep instanceof Node)) return false
-                        if (dep.name().localPart != "dependency") return false
-                        def groupIdNodes = dep.get("groupId")
-                        return groupIdNodes.isEmpty() || groupIdNodes[0].text().trim().isEmpty()
-                    }
-                }
-            }
-        }
-    }
-}
+// === === === Publishing === === ===
+// The maven-publish plugin, the publication (main jar + sourcesJar + deobfJar)
+// and the POM dependency filtering live in publish.gradle.
+// maven-publish 插件、发布产物（主 jar + sourcesJar + deobfJar）及 POM
+// 依赖过滤均配置在 publish.gradle 中。
+apply from: 'publish.gradle'

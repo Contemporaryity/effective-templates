@@ -1,0 +1,53 @@
+// ============================================================
+// publish.gradle - Maven publishing configuration
+// publish.gradle - Maven 发布配置
+//
+// Everything about publishing the mod jar lives here:
+// 关于发布模组 jar 的一切配置都在本文件中：
+//   * Applies the maven-publish plugin
+//     应用 maven-publish 插件
+//   * Publishes the main jar (components.java) plus the sourcesJar and
+//     deobfJar artifacts (both defined in build.gradle)
+//     发布主 jar（components.java）以及 sourcesJar 与 deobfJar 附加产物
+//     （两者在 build.gradle 中定义）
+//   * Disables Gradle module metadata generation (.module files)
+//     禁用 Gradle module metadata（.module 文件）的生成
+//   * Filters dependencies without a groupId (e.g. forgeBin) out of the
+//     generated POM, so the published POM stays resolvable
+//     从生成的 POM 中过滤掉没有 groupId 的依赖（如 forgeBin），
+//     保证发布出去的 POM 可被正常解析
+// ============================================================
+import groovy.util.Node
+
+apply plugin: 'maven-publish'
+
+tasks.withType(GenerateModuleMetadata) {
+    enabled = false
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifact sourcesJar
+            artifact deobfJar
+            groupId = project.group
+            artifactId = project.archivesBaseName
+            version = project.version
+
+            // Filter out dependencies without a groupId (e.g. forgeBin)
+            // 过滤掉没有 groupId 的依赖（如 forgeBin）
+            pom.withXml {
+                def depsNode = asNode().get("dependencies")
+                if (depsNode.size() > 0) {
+                    depsNode[0].children().removeAll { dep ->
+                        if (!(dep instanceof Node)) return false
+                        if (dep.name().localPart != "dependency") return false
+                        def groupIdNodes = dep.get("groupId")
+                        return groupIdNodes.isEmpty() || groupIdNodes[0].text().trim().isEmpty()
+                    }
+                }
+            }
+        }
+    }
+}
