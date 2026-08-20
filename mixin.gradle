@@ -6,20 +6,44 @@
 // (Mixingasm module), so no separate MixinBooter / SpongeMixins / ASM
 // compatibility layer is needed.
 // https://github.com/LegacyModdingMC/UniMixins
+//
+// Two distinct modes are supported:
+//   * Normal Mixin mode (beneathMixinEnabled == false):
+//     This mod owns its Mixin config (mixins.<modId>.json), so the full
+//     integration is applied: MixinConfigs/TweakClass manifest attributes,
+//     refmap generation via the annotation processor, reobf extra SRG.
+//   * Beneath Mixin mode (beneathMixinEnabled == true):
+//     This mod does NOT own any Mixin config, but the Mixin runtime must
+//     still exist so a prerequisite mod can load its own Mixins. Only the
+//     runtime is provided (UniMixins dependency + dev-environment
+//     MixinTweaker launch argument); no MixinConfigs manifest entry and no
+//     refmap are produced, so nothing ever looks for a nonexistent
+//     mixins.<modId>.json at runtime.
 // ============================================================
 
 // The jitpack.io repository is pre-configured in build.gradle
 
 def unimixinsVersion = project.findProperty('unimixinsVersion')
 
+// 'beneathMixinEnabled' is computed and exported by build.gradle before this
+// script is applied; it marks the Beneath Mixin mode (runtime only, no own
+// Mixin config).
+def beneathMode = project.ext.has('beneathMixinEnabled') && project.ext.beneathMixinEnabled
+
 dependencies {
     // unimixins-all includes: UniMix (Mixin fork), SpongeMixins, MixinBooterLegacy,
     // MixinExtras, GTNHMixins, Compat, Mixingasm
     implementation("com.github.LegacyModdingMC.UniMixins:unimixins-all-1.7.10:$unimixinsVersion:dev")
-    annotationProcessor("com.github.LegacyModdingMC.UniMixins:unimixins-all-1.7.10:$unimixinsVersion:dev")
+    if (!beneathMode) {
+        // Annotation processor only needed to generate refmaps for this mod's
+        // own Mixin classes; Beneath Mixin mode has none.
+        annotationProcessor("com.github.LegacyModdingMC.UniMixins:unimixins-all-1.7.10:$unimixinsVersion:dev")
+    }
 }
 
-// Launch Mixin in the dev environment
+// Launch Mixin in the dev environment. Kept in BOTH modes: in Beneath Mixin
+// mode this is exactly what lets the prerequisite mod's Mixins load while
+// developing/testing this mod.
 runClient {
     args("--tweakClass", "org.spongepowered.asm.launch.MixinTweaker")
 }
@@ -31,22 +55,50 @@ runServer {
 def outSrgFile = "${tasks.compileJava.temporaryDir}/outSrg.srg"
 def outRefMapFile = "${tasks.compileJava.temporaryDir}/mixins.${modId}.refmap.json"
 
-jar {
-    manifest {
-        attributes (
-                'TweakClass': 'org.spongepowered.asm.launch.MixinTweaker',
-                'MixinConfigs': "mixins.${modId}.json",
-                'ForceLoadAsMod': 'true',
-                'FMLCorePluginContainsFMLMod': 'true',
-        )
+if (!beneathMode) {
+    // Normal Mixin mode: this mod owns mixins.<modId>.json.
+    // Manifest attributes, one by one:
+    //   TweakClass                 -> Mixin runtime bootstrap; makes this jar a
+    //                                 coremod when launched standalone.
+    //   MixinConfigs               -> declares THIS mod's own Mixin config; the
+    //                                 reason a real mixins.<modId>.json must exist.
+    //   ForceLoadAsMod             -> coremod/FML loading: force-load the coremod
+    //                                 jar as a regular mod too.
+    //   FMLCorePluginContainsFMLMod-> coremod/FML loading: tells FML the coremod
+    //                                 jar also contains an @Mod class.
+    jar {
+        manifest {
+            attributes (
+                    'TweakClass': 'org.spongepowered.asm.launch.MixinTweaker',
+                    'MixinConfigs': "mixins.${modId}.json",
+                    'ForceLoadAsMod': 'true',
+                    'FMLCorePluginContainsFMLMod': 'true',
+            )
+        }
+
+        from outRefMapFile;
     }
 
-    from outRefMapFile;
-}
+    // Feed the Mixin annotation processor with SRG mappings and refmap output
+    tasks.compileJava.options.compilerArgs += ["-AreobfSrgFile=${tasks.reobf.srg}", "-AoutSrgFile=${outSrgFile}", "-AoutRefMapFile=${outRefMapFile}"];
 
-// Feed the Mixin annotation processor with SRG mappings and refmap output
-tasks.compileJava.options.compilerArgs += ["-AreobfSrgFile=${tasks.reobf.srg}", "-AoutSrgFile=${outSrgFile}", "-AoutRefMapFile=${outRefMapFile}"];
+    reobf {
+        addExtraSrgFile outSrgFile
+    }
+} else {
+    // Beneath Mixin mode: deliberately NO 'TweakClass', NO 'MixinConfigs',
+    // NO 'ForceLoadAsMod', NO 'FMLCorePluginContainsFMLMod' manifest
+    // attributes. This mod is not a Mixin config owner and not a coremod;
+    // the Mixin runtime is supplied by the UniMixins dependency jar instead,
+    // so nothing will ever search for a missing mixins.<modId>.json.
+    println ">>> Beneath Mixin mode: Mixin runtime kept for prerequisite mods, no MixinConfigs/refmap for this mod"
 
-reobf {
-    addExtraSrgFile outSrgFile
+    // Friendly heads-up: a leftover Mixin config is not packaged in this mode
+    // (build.gradle excludes mixins.*.json from resources), so it is dead code.
+    def leftoverConfigs = fileTree("src/main/resources") { include "mixins.*.json" }.files
+    if (!leftoverConfigs.isEmpty()) {
+        println ">>> WARNING: Beneath Mixin mode is on, but Mixin config(s) still exist: " +
+                leftoverConfigs*.name.join(', ') + " - they will NOT be packaged. " +
+                "Delete them, or set enableBeneathMixin=false if this mod owns Mixins."
+    }
 }

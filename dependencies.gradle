@@ -20,7 +20,7 @@ dependencies {
 
     if (project.enableUsingScala.toBoolean()) {
         // When Scala is enabled, declare the scala-library yourself (example below)
-        // implementation "org.scala-lang:scala-library:2.13.16"
+        implementation "org.scala-lang:scala-library:2.13.16"
     }
 
     // Local jars under the lib/ directory (gitignored)
