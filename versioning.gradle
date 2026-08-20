@@ -1,14 +1,32 @@
 // ============================================================
-// versioning.gradle - Tags.java based mod metadata extraction
+// versioning.gradle - Mod metadata versioning (two modes)
+// versioning.gradle - 模组元数据版本管理（两种模式）
 //
-// Separated from build.gradle so that all Tags.java related
-// logic lives in one place.
-//
-// Behaviour:
+// Mode 1 - Tags.java extraction (needTagsToIdentify=true, default)
+// 模式 1 - Tags.java 提取（needTagsToIdentify=true，默认）:
 //   * Locates Tags.java (gradle.properties "tags_file_path" or auto-scan src/)
+//     定位 Tags.java（优先 gradle.properties 的 "tags_file_path"，否则自动扫描 src/）
 //   * Extracts VERSION / NAME / MODID constants via regex
+//     通过正则提取 VERSION / NAME / MODID 常量
 //   * Fills project.version / modVersion / modName / modId
-//   * Disabled by setting needTagsToIdentify=false in gradle.properties
+//     填充 project.version / modVersion / modName / modId
+//
+// Mode 2 - Git tag versioning (enableGitTagVersioning=true, GTNH style)
+// 模式 2 - Git tag 版本化（enableGitTagVersioning=true，GTNH 风格）:
+//   * Derives the version from git, mimicking GTNH's GitVersionModule:
+//     clean tag = tag itself; commits ahead of the tag =
+//     "tag-<branch>.<distance>+<hash>[-dirty]"; no tag/no repo = "NO-GIT-TAG-SET"
+//     仿照 GTNH GitVersionModule 从 git 推导版本：干净的 tag 即版本本身；
+//     tag 之后有提交则拼接 "tag-<分支>.<提交距离>+<哈希>[-dirty]"；无 tag/无仓库则为 "NO-GIT-TAG-SET"
+//   * Rewrites the VERSION constant inside Tags.java automatically
+//     (NAME/MODID are kept; the file is created if missing)
+//     自动改写 Tags.java 中的 VERSION 常量（保留 NAME/MODID；文件缺失时自动创建）
+//   * A VERSION environment variable overrides the git-derived version
+//     VERSION 环境变量可覆盖 git 推导出的版本
+//   * An optional "versionPattern" regex validates clean-tag releases
+//     可选的 "versionPattern" 正则用于校验干净 tag 的版本格式
+//   * Takes precedence: needTagsToIdentify is ignored while this mode is on
+//     优先级更高：开启后 needTagsToIdentify 不再生效
 // ============================================================
 import org.gradle.api.GradleException
 
@@ -54,19 +72,204 @@ def extractTagsFromJava() {
     ]
 }
 
-def needTags = project.hasProperty("needTagsToIdentify") ? project.needTagsToIdentify.toBoolean() : true
+// Resolve the Tags.java path for WRITING. Unlike extraction mode this does not
+// fail when the file is missing - it is generated on demand. The package line
+// is recovered from an existing file or derived from modGroupId.
+// 解析用于写入的 Tags.java 路径。与提取模式不同，文件缺失不报错，而是按需生成。
+// package 声明取自已有文件，否则根据 modGroupId 推导。
+def resolveTagsFileForWrite() {
+    def tagsFilePath = project.hasProperty("tags_file_path") ? project.tags_file_path : null
 
-if (needTags) {
-    def tags = extractTagsFromJava()
-    ext.modVersion = tags.version
-    project.version = tags.version
-    if (tags.name)  { ext.modName = tags.name }
-    if (tags.modid) { ext.modId  = tags.modid }
+    if (tagsFilePath != null) {
+        return file(tagsFilePath)
+    }
 
-    println ">>> Auto-read from ${tags.path}:"
-    println ">>>   VERSION = ${tags.version}"
-    if (tags.name)  println ">>>   NAME    = ${tags.name}"
-    if (tags.modid) println ">>>   MODID   = ${tags.modid}"
+    def tagsFiles = fileTree("src") {
+        include "**/Tags.java"
+    }.files
+
+    if (tagsFiles.size() > 1) {
+        throw new GradleException("Multiple Tags.java found under src/: ${tagsFiles*.path}")
+    }
+    if (!tagsFiles.isEmpty()) {
+        return tagsFiles.first()
+    }
+
+    // No Tags.java yet: place it under the modGroupId package directory
+    // 尚无 Tags.java：按 modGroupId 的包目录放置
+    def packagePath = project.modGroupId.toString().replace('.', '/')
+    return file("src/main/java/${packagePath}/Tags.java")
+}
+
+// Rewrite the VERSION constant of Tags.java to the given version.
+// Keeps NAME/MODID when the file exists; otherwise generates the whole class
+// from modName / modId in gradle.properties.
+// 将 Tags.java 中的 VERSION 常量改写为指定版本。
+// 文件存在时保留 NAME/MODID；否则根据 gradle.properties 的 modName / modId 生成整个类。
+def writeTagsVersion(File tagsFile, String version) {
+    def template = """\
+package ${project.modGroupId};
+
+/**
+ * Mod metadata.
+ *
+ * VERSION is maintained by versioning.gradle (enableGitTagVersioning=true),
+ * driven by git tags.
+ */
+public class Tags {
+    public static final String NAME = "${project.modName}";
+    public static final String MODID = "${project.modId}";
+    public static final String VERSION = "${version}";
+}
+"""
+    if (tagsFile.exists()) {
+        def tagsText = tagsFile.text
+        def versionMatcher = (tagsText =~ /VERSION\s*=\s*"([^"]*)"/)
+        if (versionMatcher.find()) {
+            def updated = tagsText.replaceFirst(/VERSION\s*=\s*"[^"]*"/, java.util.regex.Matcher.quoteReplacement("VERSION = \"${version}\""))
+            if (tagsText != updated) {
+                tagsFile.text = updated
+                println ">>> Updated VERSION to ${version} in ${tagsFile.path}"
+            }
+            return
+        }
+        // VERSION constant missing - fall through and regenerate the whole file
+        // 找不到 VERSION 常量 - 直接重新生成整个文件
+    } else {
+        tagsFile.parentFile.mkdirs()
+        println ">>> Generated ${tagsFile.path}"
+    }
+    tagsFile.text = template
+}
+
+// Derive the mod version from git, mirroring GTNH's GitVersionModule (RFG):
+//   * clean tag                    -> the tag itself (e.g. "1.2.0")
+//   * commits ahead of the tag     -> "tag-<branch>.<distance>+<hash>[-dirty]"
+//   * dirty working tree on a tag  -> "tag-<branch>+<hash>-dirty"
+//   * no tag at all                -> short commit hash (fallback)
+//   * git failure / no repository  -> "NO-GIT-TAG-SET"
+// Returns [version: String, checkable: boolean]; checkable is true only for a
+// clean, exact tag so the optional versionPattern applies only to real releases.
+// 仿照 GTNH 的 GitVersionModule（RFG）从 git 推导版本：
+//   * 干净的 tag               -> tag 本身（如 "1.2.0"）
+//   * tag 之后有提交           -> "tag-<分支>.<提交距离>+<哈希>[-dirty]"
+//   * tag 上工作区有未提交改动 -> "tag-<分支>+<哈希>-dirty"
+//   * 完全没有 tag             -> 短提交哈希（兜底）
+//   * git 失败 / 无仓库        -> "NO-GIT-TAG-SET"
+// 返回 [version: String, checkable: boolean]；checkable 仅在精确命中干净 tag 时为 true，
+// 这样可选的 versionPattern 只校验正式发布版本。
+def getVersionFromGit() {
+    def execGit = { List<String> args ->
+        def out = new ByteArrayOutputStream()
+        def res = exec {
+            commandLine(["git"] + args)
+            standardOutput = out
+            ignoreExitValue = true
+        }
+        return [ok: res.exitValue == 0, text: out.toString("UTF-8").trim()]
+    }
+
+    def envOverride = System.getenv("VERSION")
+    if (envOverride != null && !envOverride.trim().isEmpty()) {
+        println ">>> Using version from VERSION environment variable: ${envOverride.trim()}"
+        return [version: envOverride.trim(), checkable: false]
+    }
+
+    def hash = execGit(["rev-parse", "--short=8", "HEAD"])
+    if (!hash.ok) {
+        // Not a git repository (e.g. downloaded as ZIP) or git unavailable
+        // 不在 git 仓库中（如 ZIP 下载）或 git 不可用
+        println ">>> WARNING: git unavailable or not a git repository - using NO-GIT-TAG-SET"
+        return [version: "NO-GIT-TAG-SET", checkable: false]
+    }
+
+    def describe = execGit(["describe", "--tags", "--dirty", "--always"])
+    def described = describe.ok ? describe.text : ""
+    def dirty = described.endsWith("-dirty")
+    if (dirty) described = described.substring(0, described.length() - "-dirty".length())
+
+    // Whether any tag exists at all: with --always a tagless repo falls back
+    // to the bare commit hash, which we can detect with --abbrev=40
+    // 仓库里是否存在任何 tag：带 --always 时无 tag 会退化为裸提交哈希，
+    // 用 --abbrev=40 的全长哈希可以准确判断这一点
+    def fullHash = execGit(["describe", "--tags", "--always", "--abbrev=40"])
+    boolean hasAnyTag = fullHash.ok && !fullHash.text.matches("[0-9a-f]+")
+    if (!describe.ok || !hasAnyTag) {
+        println ">>> WARNING: no git tags found - falling back to commit hash ${hash.text}"
+        return [version: "${hash.text}${dirty ? '-dirty' : ''}", checkable: false]
+    }
+
+    def branch = execGit(["rev-parse", "--abbrev-ref", "HEAD"])
+    def branchName = branch.ok ? branch.text : (System.getenv("GIT_BRANCH") ?: "git")
+    branchName = branchName.startsWith("origin/") ? branchName.substring("origin/".length()) : branchName
+    branchName = branchName.replaceAll("[^a-zA-Z0-9-]+", "-") // sanitize for semver / 清理为合法 semver 片段
+
+    // "git describe" format: <tag>-<distance>-g<hash> or plain <tag>
+    // "git describe" 输出格式：<tag>-<提交距离>-g<哈希> 或纯 <tag>
+    def m = described =~ /^(.*)-(\d+)-g([0-9a-f]+)$/
+    def identifiedVersion
+    boolean checkable = false
+
+    if (m.matches()) {
+        def tag = m[0][1]
+        def distance = m[0][2]
+        identifiedVersion = "${tag}-${branchName}.${distance}+${hash.text}${dirty ? '-dirty' : ''}"
+    } else {
+        // Exactly on a tag
+        // 正好停在某个 tag 上
+        identifiedVersion = described
+        if (!dirty) checkable = true
+        else identifiedVersion = "${described}-${branchName}+${hash.text}-dirty"
+    }
+    return [version: identifiedVersion, checkable: checkable]
+}
+
+// Apply the git-derived version to the project and rewrite Tags.java.
+// Called before the needTagsToIdentify branch so it fully takes over.
+// 将 git 推导出的版本应用到工程并改写 Tags.java。
+// 在 needTagsToIdentify 分支之前调用，从而完全接管版本管理。
+def applyGitTagVersioning() {
+    def gitInfo = getVersionFromGit()
+    def version = gitInfo.version
+
+    // Optional release-tag format check (GTNH-style "versionPattern")
+    // 可选的发布 tag 格式校验（GTNH 风格的 "versionPattern"）
+    if (gitInfo.checkable && project.hasProperty("versionPattern") && !project.versionPattern.toString().isEmpty()) {
+        def rawPattern = project.versionPattern.toString()
+        if (!version.matches(rawPattern)) {
+            throw new GradleException("Invalid version '${version}' does not match version pattern '${rawPattern}'")
+        }
+    }
+
+    ext.modVersion = version
+    project.version = version
+
+    writeTagsVersion(resolveTagsFileForWrite(), version)
+
+    println ">>> Git tag versioning: project.version = ${version}"
+}
+
+def useGitTagVersioning = project.hasProperty("enableGitTagVersioning") ? project.enableGitTagVersioning.toBoolean() : false
+
+if (useGitTagVersioning) {
+    // Git tag mode takes full control; needTagsToIdentify is ignored here.
+    // Git tag 模式全面接管，needTagsToIdentify 在此被忽略。
+    applyGitTagVersioning()
 } else {
-    println ">>> needTagsToIdentify=false, using values from gradle.properties"
+    def needTags = project.hasProperty("needTagsToIdentify") ? project.needTagsToIdentify.toBoolean() : true
+
+    if (needTags) {
+        def tags = extractTagsFromJava()
+        ext.modVersion = tags.version
+        project.version = tags.version
+        if (tags.name)  { ext.modName = tags.name }
+        if (tags.modid) { ext.modId  = tags.modid }
+
+        println ">>> Auto-read from ${tags.path}:"
+        println ">>>   VERSION = ${tags.version}"
+        if (tags.name)  println ">>>   NAME    = ${tags.name}"
+        if (tags.modid) println ">>>   MODID   = ${tags.modid}"
+    } else {
+        println ">>> needTagsToIdentify=false, using values from gradle.properties"
+    }
 }

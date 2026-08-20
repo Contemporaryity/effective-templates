@@ -11,8 +11,10 @@ import groovy.util.Node
 //   * Jitpack ready - jitpack.yml + jitpack.io repository pre-configured
 //   * Dependencies in a separate dependencies.gradle
 //   * Tags.java auto-extraction of mod metadata (modVersion/modName/modId),
-//     implemented in versioning.gradle
-//     依赖独立在 dependencies.gradle；Tags.java 元数据提取逻辑独立在 versioning.gradle
+//     implemented in versioning.gradle; optional GTNH-style git tag
+//     versioning can regenerate Tags.java from pushed git tags
+//     依赖独立在 dependencies.gradle；Tags.java 元数据提取逻辑独立在 versioning.gradle，
+//     并可选开启 GTNH 风格的 git tag 版本化（自动改写 Tags.java）
 // ============================================================
 
 buildscript {
@@ -115,8 +117,11 @@ if (!project.modDependencies.isEmpty()) dependenciesList.add(project.modDependen
 
 // Tags.java based metadata extraction (modVersion/modName/modId) lives in
 // versioning.gradle; it overwrites project.version before processResources runs.
+// Optionally (enableGitTagVersioning=true) it derives the version from git
+// tags instead and regenerates Tags.java, see versioning.gradle.
 // 基于 Tags.java 的元数据提取（modVersion/modName/modId）逻辑位于 versioning.gradle，
-// 它会在 processResources 执行前覆盖 project.version。
+// 它会在 processResources 执行前覆盖 project.version。可选开启 enableGitTagVersioning=true
+// 后改为从 git tag 推导版本并自动改写 Tags.java，详见 versioning.gradle。
 apply from: 'versioning.gradle'
 
 processResources {
