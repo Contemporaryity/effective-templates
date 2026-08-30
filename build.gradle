@@ -128,8 +128,25 @@ if (project.enableUsingMCLib.toBoolean()) {
     sourceSets.main.java.exclude("${modPackagePath}/mclib/**")
 }
 
+// Parse the modDependencies property (FML sorting-rule style, ';'-separated,
+// e.g. "required-after:modid@[1.0,);after:modid2") into a list of plain
+// "modid" / "modid@range" references - the only format the FML mcmod.info
+// parser accepts (see FML VersionParser.parseVersionReference: one entry must
+// split on '@' into at most two parts). Injecting the raw string instead
+// yields a single invalid element like ["required-after:a@[1.0,);after:b"]
+// that makes FML reject the whole mcmod.info file.
 def dependenciesList = []
-if (!project.modDependencies.isEmpty()) dependenciesList.add(project.modDependencies)
+if (!project.modDependencies.isEmpty()) {
+    dependenciesList = project.modDependencies.split(';').collect { entry ->
+        // Strip the FML sorting-rule prefixes; mcmod.info dependencies carry
+        // no required/after semantics of their own.
+        entry.trim().replaceFirst(/(?i)^(required-after|required-before|after|before):/, '')
+    }.findAll { !it.isEmpty() }
+}
+// expand() interpolates plain toString() values, which does NOT quote list
+// elements (["a", "b"] would become [a, b] - invalid JSON). Serialize to a
+// real JSON array so FML can parse the dependencies field.
+def dependenciesJson = groovy.json.JsonOutput.toJson(dependenciesList)
 
 // Tags.java based metadata extraction (modVersion/modName/modId) lives in
 // versioning.gradle; it overwrites project.version before processResources runs.
@@ -148,7 +165,7 @@ processResources {
     inputs.property "authorList", [project.authorList]
     inputs.property "credits", project.credits
     inputs.property "logo", project.logo
-    inputs.property "dependencies", dependenciesList
+    inputs.property "dependencies", dependenciesJson
 
     filesMatching("mcmod.info") {
         expand  'modversion': project.version,
@@ -160,7 +177,7 @@ processResources {
                 'authorList': [project.authorList],
                 'credits': project.credits,
                 'logo': project.logo,
-                'dependencies': dependenciesList
+                'dependencies': dependenciesJson
     }
 
     // Auto-fill the ${modid} placeholder inside the Mixin config (e.g. the
