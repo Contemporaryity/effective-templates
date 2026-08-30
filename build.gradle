@@ -178,6 +178,45 @@ processResources {
             }
             expand 'modid': project.modId
         }
+
+        // GTNH-style fallback (GTNHGradle GenerateMixinAssetsTask): when this
+        // mod ships NO base Mixin config at all - e.g. it only uses the
+        // UniMixins special names mixins.<modId>.early.json /
+        // mixins.<modId>.late.json - the jar manifest still declares
+        // MixinConfigs=mixins.<modId>.json, and the Mixin runtime would fail
+        // at launch looking for a missing config. Generate an empty default
+        // config so the manifest entry always resolves and no hand-written
+        // mixins.<modId>.json is required. Only relevant when this mod owns a
+        // Mixin config (enableUsingMixin=true, non-Beneath mode).
+        if (project.enableUsingMixin.toBoolean()) {
+            def templateConfig = file("src/main/resources/mixins.examplemod.json")
+            def baseConfig = file("src/main/resources/mixins.${project.modId}.json".toString())
+            doFirst {
+                if (!templateConfig.exists() && !baseConfig.exists()) {
+                    def mixinPackage = project.hasProperty('mixinsPackage') ? project.mixinsPackage : 'mixin'
+                    def mixinPlugin = project.hasProperty('mixinPlugin') ? project.mixinPlugin : ''
+                    def config = new StringBuilder()
+                    config.append("{\n")
+                    config.append('  "required": true,\n')
+                    config.append('  "minVersion": "0.8.5-GTNH",\n')
+                    config.append('  "package": "').append(project.modGroupId).append('.').append(mixinPackage).append("\",\n")
+                    if (mixinPlugin?.trim()) {
+                        config.append('  "plugin": "').append(project.modGroupId).append('.').append(mixinPlugin).append("\",\n")
+                    }
+                    config.append('  "refmap": "mixins.').append(project.modId).append(".refmap.json\",\n")
+                    config.append('  "target": "@env(DEFAULT)",\n')
+                    config.append('  "compatibilityLevel": "JAVA_8",\n')
+                    config.append('  "mixins": [],\n')
+                    config.append('  "client": [],\n')
+                    config.append('  "server": []\n')
+                    config.append("}\n")
+                    def outFile = new File(sourceSets.main.output.resourcesDir, "mixins.${project.modId}.json")
+                    outFile.parentFile.mkdirs()
+                    outFile.text = config.toString()
+                    println ">>> No base Mixin config found - generated an empty mixins.${project.modId}.json for the jar manifest"
+                }
+            }
+        }
     } else {
         // Beneath Mixin mode: this mod ships no Mixin config at all. Drop any
         // leftover (template) config from the packaged resources so neither

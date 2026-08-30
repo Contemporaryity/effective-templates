@@ -12,6 +12,11 @@
 //     This mod owns its Mixin config (mixins.<modId>.json), so the full
 //     integration is applied: MixinConfigs/TweakClass manifest attributes,
 //     refmap generation via the annotation processor, reobf extra SRG.
+//     GTNH-style: when no base config exists at all (build.gradle only ships
+//     the UniMixins special names mixins.<modId>.early.json /
+//     mixins.<modId>.late.json), an empty default mixins.<modId>.json is
+//     auto-generated during processResources, so the MixinConfigs manifest
+//     entry always resolves and no hand-written base config is required.
 //   * Beneath Mixin mode (beneathMixinEnabled == true):
 //     This mod does NOT own any Mixin config, but the Mixin runtime must
 //     still exist so a prerequisite mod can load its own Mixins. Only the
@@ -61,7 +66,8 @@ if (!beneathMode) {
     //   TweakClass                 -> Mixin runtime bootstrap; makes this jar a
     //                                 coremod when launched standalone.
     //   MixinConfigs               -> declares THIS mod's own Mixin config; the
-    //                                 reason a real mixins.<modId>.json must exist.
+    //                                 reason a mixins.<modId>.json must exist in
+    //                                 the jar (auto-generated when missing).
     //   ForceLoadAsMod             -> coremod/FML loading: force-load the coremod
     //                                 jar as a regular mod too.
     //   FMLCorePluginContainsFMLMod-> coremod/FML loading: tells FML the coremod
@@ -74,6 +80,15 @@ if (!beneathMode) {
                     'ForceLoadAsMod': 'true',
                     'FMLCorePluginContainsFMLMod': 'true',
             )
+
+            // GTNH-style early mixins: an IEarlyMixinLoader coremod
+            // (mixins.<modId>.early.json) is discovered by GTNHMixins/UniMixins
+            // through FML's coremod list, so it must be registered via the
+            // FMLCorePlugin manifest attribute. Optional, see coreModClass in
+            // gradle.properties.
+            if (project.hasProperty('coreModClass') && project.coreModClass?.trim()) {
+                attributes('FMLCorePlugin': "${project.modGroupId}.${project.coreModClass}")
+            }
         }
 
         from outRefMapFile;
