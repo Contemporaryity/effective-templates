@@ -148,6 +148,12 @@ if (!project.modDependencies.isEmpty()) {
 // real JSON array so FML can parse the dependencies field.
 def dependenciesJson = groovy.json.JsonOutput.toJson(dependenciesList)
 
+// Same quoting pitfall for authorList: the stock gradle.properties happens to
+// carry the quotes inside the value (authorList="ExampleDude"), which only
+// accidentally produces valid JSON. Strip any wrapping quotes and re-serialize
+// so mcmod.info stays valid regardless of how the property is written.
+def authorListJson = groovy.json.JsonOutput.toJson([project.authorList.toString().replaceAll(/^"+|\"+$/, '')])
+
 // Tags.java based metadata extraction (modVersion/modName/modId) lives in
 // versioning.gradle; it overwrites project.version before processResources runs.
 // Optionally (enableGitTagVersioning=true) it derives the version from git
@@ -162,7 +168,7 @@ processResources {
     inputs.property "modid", project.modId
 
     inputs.property "url", project.url
-    inputs.property "authorList", [project.authorList]
+    inputs.property "authorList", authorListJson
     inputs.property "credits", project.credits
     inputs.property "logo", project.logo
     inputs.property "dependencies", dependenciesJson
@@ -174,7 +180,7 @@ processResources {
                 'modname': project.modName,
                 'modid': project.modId,
                 'url': project.url,
-                'authorList': [project.authorList],
+                'authorList': authorListJson,
                 'credits': project.credits,
                 'logo': project.logo,
                 'dependencies': dependenciesJson
